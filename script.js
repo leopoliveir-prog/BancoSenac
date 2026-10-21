@@ -1,3 +1,26 @@
+//  Funções auxiliares de cookies
+function salvarCookie(nome, valor, dias) {
+    const d = new Date();
+    d.setTime(d.getTime() + (dias * 24 * 60 * 60 * 1000));
+    const expires = "expires=" + d.toUTCString();
+    document.cookie = nome + "=" + encodeURIComponent(valor) + ";" + expires + ";path=/";
+}
+
+function lerCookie(nome) {
+    const nameEQ = nome + "=";
+    const ca = document.cookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) == ' ') c = c.substring(1, c.length);
+        if (c.indexOf(nameEQ) == 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+    }
+    return null;
+}
+
+function apagarCookie(nome) {
+    document.cookie = nome + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+}
+
 // 1. Dados em Memória
 const clientes = [
     { cpf: "111.222.333-44", senha: "123", nome: "Dennis Lopes", saldo: 5000 },
@@ -18,6 +41,8 @@ const secaoPainel = document.querySelector('#painel-section');
 const campoSaldo = document.querySelector('#saldo-valor');
 const boasVindas = document.querySelector('#boas-vindas');
 const loginErro = document.querySelector('#login-erro');
+
+const formCadastro = document.querySelector('#form-cadastro');  
 
 // 3. Alternância entre Telas (Login <-> Cadastro)
 document.querySelector('#link-ir-cadastro').addEventListener('click', (e) => {
@@ -42,6 +67,15 @@ document.querySelector('#btn-login').addEventListener('click', () => {
     if (clienteEncontrado) {
         usuarioLogado = clienteEncontrado;
         loginErro.style.display = 'none';
+
+        // Grava os cookies
+        const primeiroNome = clienteEncontrado.nome.split(' ')[0];
+        const agora = new Date().toLocaleString('pt-BR');
+
+        salvarCookie('senac_cpf', clienteEncontrado.cpf, 30);
+        salvarCookie('senac_nome', primeiroNome, 30);
+        salvarCookie('senac_ultimo_acesso', agora, 30);
+
         secaoLogin.style.display = 'none';
         secaoPainel.style.display = 'block';
 
@@ -53,11 +87,13 @@ document.querySelector('#btn-login').addEventListener('click', () => {
 });
 
 // 5. Lógica de Submissão de Cadastro (Onde aplicaremos as RegEx)
-document.querySelector('#form-cadastro').addEventListener('submit', (e) => {
+formCadastro.addEventListener('submit', (e) => {
     e.preventDefault();
 
-    // TODO: Os alunos vão validar os campos com RegEx e conferir se as senhas coincidem.
-    // Após a validação com sucesso, transita para a tela de análise:
+    // TODO: validar com RegEx (próxima aula)
+
+    localStorage.removeItem('senac_rascunho_cadastro');   // ← NOVO
+    formCadastro.reset();                                 // ← NOVO
     secaoCadastro.style.display = 'none';
     secaoSucesso.style.display = 'block';
 });
@@ -75,3 +111,60 @@ document.querySelector('#btn-transferir').addEventListener('click', () => { });
 document.querySelector('#btn-sair').addEventListener('click', () => {
     location.reload();
 });
+
+// 8, 9 e 11. Rascunho do cadastro (localStorage)
+const campos = ['nome', 'cpf', 'email', 'celular', 'cep', 'endereco', 'cidade', 'estado'];
+
+// Salvar ao digitar
+formCadastro.addEventListener('input', () => {
+    const dados = {};
+    campos.forEach(c => dados[c] = document.querySelector('#cad-' + c).value);
+
+    localStorage.setItem('senac_rascunho_cadastro', JSON.stringify({
+        dados: dados,
+        timestamp: new Date().getTime()
+    }));
+});
+
+// Restaurar ao abrir a página
+const rascunhoSalvo = localStorage.getItem('senac_rascunho_cadastro');
+if (rascunhoSalvo) {
+    const d = JSON.parse(rascunhoSalvo).dados;
+    campos.forEach(c => document.querySelector('#cad-' + c).value = d[c] || '');
+    console.log("Rascunho de cadastro recuperado com sucesso!");
+}
+
+// Descartar manualmente
+document.querySelector('#link-limpar-rascunho').addEventListener('click', (e) => {
+    e.preventDefault();
+    if (confirm('Deseja realmente descartar o rascunho do cadastro?')) {
+        localStorage.removeItem('senac_rascunho_cadastro');
+        formCadastro.reset();
+    }
+});
+
+// 13. Reconhecimento do cliente por cookies
+const cpfSalvo = lerCookie('senac_cpf');
+const nomeSalvo = lerCookie('senac_nome');
+const ultimoAcesso = lerCookie('senac_ultimo_acesso');
+
+if (cpfSalvo && nomeSalvo) {
+    const subtitulo = document.querySelector('#login-section .subtitle');
+
+    document.querySelector('#input-cpf').value = cpfSalvo;
+    subtitulo.innerHTML = `Que bom ter você de volta, <strong>${nomeSalvo}</strong>!<br>
+        <small>Último acesso: ${ultimoAcesso}</small><br>
+        <a href="#" id="link-trocar-usuario">Não é você? Trocar de conta</a>`;
+    document.querySelector('#input-senha').focus();
+
+    document.querySelector('#link-trocar-usuario').addEventListener('click', (e) => {
+        e.preventDefault();
+        apagarCookie('senac_cpf');
+        apagarCookie('senac_nome');
+        apagarCookie('senac_ultimo_acesso');
+
+        document.querySelector('#input-cpf').value = '';
+        document.querySelector('#input-senha').value = '';
+        subtitulo.textContent = 'Portal do Cliente';
+    });
+}
